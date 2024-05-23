@@ -1,0 +1,120 @@
+﻿@page "/shipping-data"
+@using OnlineStore_Blazor.Models
+@using OnlineStore_Blazor.Services
+@using Microsoft.JSInterop
+@using System.Text.Json
+@using System.IO
+@using System.Text
+@using System.Xml.Serialization
+
+@inject NavigationManager Navigation
+@inject ShippingInfoService ShippingInfoService
+@inject ShoppingCart ShoppingCart
+@inject IJSRuntime JS
+
+<h1>Datos de Envío Almacenados</h1>
+
+@if (shippingData.Count == 0)
+{
+    <p>No hay datos de envío almacenados.</p>
+}
+else
+{
+    <ul>
+        @foreach (var info in shippingData)
+        {
+            <li>
+                <p><strong>Nombre:</strong> @info.Name</p>
+                <p><strong>Email:</strong> @info.Email</p>
+                <p><strong>Dirección:</strong> @info.Address</p>
+                <hr />
+            </li>
+        }
+    </ul>
+}
+
+<h1>Carrito de Compras</h1>
+
+@if (ShoppingCart.Items.Count == 0)
+{
+    <p>El carrito está vacío.</p>
+}
+else
+{
+    <ul>
+        @foreach (var item in ShoppingCart.Items)
+        {
+            <li>
+                <p><strong>Producto:</strong> @item.Title</p>
+                <p><strong>Precio:</strong> @item.Price.ToString("c")</p>
+                <button @onclick="() => RemoveFromCart(item)" class="btn btn-danger">Eliminar</button>
+                <hr />
+            </li>
+        }
+    </ul>
+
+    <h3>Total: @ShoppingCart.GetTotalPrice().ToString("c")</h3>
+}
+
+<button @onclick="ExportDataAsJsonAsync" class="btn btn-primary">Exportar Datos a JSON</button>
+<button @onclick="ExportDataAsXmlAsync" class="btn btn-primary">Exportar Datos a XML</button>
+
+@code {
+    private List<ShippingData> shippingData = new List<ShippingData>();
+
+    protected override void OnInitialized()
+    {
+        CargarDatos();
+    }
+
+    private void CargarDatos()
+    {
+        shippingData = ShippingInfoService.GetAllShippingData();
+    }
+
+    private void RemoveFromCart(Product product)
+    {
+        ShoppingCart.RemoveItem(product);
+    }
+
+    private async Task ExportDataAsJsonAsync()
+    {
+        var exportData = new
+        {
+            CartItems = ShoppingCart.Items,
+            ShippingData = shippingData
+        };
+
+        var json = JsonSerializer.Serialize(exportData, new JsonSerializerOptions { WriteIndented = true });
+        var byteArray = Encoding.UTF8.GetBytes(json);
+        var stream = new MemoryStream(byteArray);
+        var fileName = "exported_data.json";
+
+        using var streamRef = new DotNetStreamReference(stream: stream);
+        await JS.InvokeVoidAsync("downloadFileFromStream", fileName, streamRef);
+    }
+
+    private async Task ExportDataAsXmlAsync()
+    {
+        var exportData = new ExportData
+        {
+            CartItems = ShoppingCart.Items,
+            ShippingData = shippingData
+        };
+
+        var xmlSerializer = new XmlSerializer(typeof(ExportData));
+        await using var memoryStream = new MemoryStream();
+        xmlSerializer.Serialize(memoryStream, exportData);
+        memoryStream.Position = 0;
+        var fileName = "exported_data.xml";
+
+        using var streamRef = new DotNetStreamReference(stream: memoryStream);
+        await JS.InvokeVoidAsync("downloadFileFromStream", fileName, streamRef);
+    }
+
+    public class ExportData
+    {
+        public List<Product> CartItems { get; set; }
+        public List<ShippingData> ShippingData { get; set; }
+    }
+}

@@ -1,0 +1,85 @@
+﻿@page "/new-stock"
+@using OnlineStore_Blazor.Models
+@using OnlineStore_Blazor.Services
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Text.Json
+@using System.IO
+@using System.Xml.Serialization
+
+@inject ProductService ProductService
+@inject ShoppingCart ShoppingCart
+
+<h1>Nuevo Stock</h1>
+
+<h2>Importar Productos</h2>
+<InputFile OnChange="HandleFileSelected" accept=".json, .xml" />
+
+@if (importedProducts == null)
+{
+    <p><em>Cargando...</em></p>
+}
+else if (importedProducts.Count == 0)
+{
+    <p>No hay productos nuevos en stock.</p>
+}
+else
+{
+    foreach (var product in importedProducts)
+    {
+        <div class="product-card">
+            <h2>@product.Title</h2>
+            <img class="product-image" src="@product.Image" alt="@product.Title">
+            <p>@product.Description</p>
+            <p class="product-price">Precio: @product.Price.ToString("c")</p>
+
+            <button @onclick="() => AddToCart(product)" class="btn btn-primary">Agregar al carrito</button>
+        </div>
+    }
+}
+
+@code {
+    private List<Product> importedProducts = new List<Product>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        importedProducts = await ProductService.GetImportedProductsAsync();
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        var extension = Path.GetExtension(file.Name).ToLower();
+
+        using var stream = file.OpenReadStream();
+        using var reader = new StreamReader(stream);
+        var content = await reader.ReadToEndAsync();
+
+        if (extension == ".json")
+        {
+            var products = JsonSerializer.Deserialize<List<Product>>(content);
+            foreach (var product in products)
+            {
+                await ProductService.AddImportedProductAsync(product);
+            }
+        }
+        else if (extension == ".xml")
+        {
+            var xmlSerializer = new XmlSerializer(typeof(List<Product>));
+            using var stringReader = new StringReader(content);
+            var products = (List<Product>)xmlSerializer.Deserialize(stringReader);
+            foreach (var product in products)
+            {
+                await ProductService.AddImportedProductAsync(product);
+            }
+        }
+
+        
+        importedProducts = await ProductService.GetImportedProductsAsync();
+        StateHasChanged();
+    }
+
+    private void AddToCart(Product product)
+    {
+        ShoppingCart.AddItem(product);
+    }
+}
