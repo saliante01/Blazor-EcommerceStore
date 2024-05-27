@@ -1,0 +1,143 @@
+﻿@page "/admin"
+@using System.Collections.Generic
+@using System.Linq
+
+<h3>Administración de Ventas Mensuales</h3>
+
+<EditForm Model="@newSale" OnValidSubmit="AddSale">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="form-group">
+        <label for="month">Mes</label>
+        <InputSelect id="month" class="form-control" @bind-Value="newSale.Month">
+            <option value="">Seleccione un mes</option>
+            @foreach (var month in months)
+            {
+                <option value="@month">@month</option>
+            }
+        </InputSelect>
+    </div>
+    <div class="form-group">
+        <label for="sales">Ventas</label>
+        <InputNumber id="sales" class="form-control" @bind-Value="newSale.Sales" />
+    </div>
+    <button type="submit" class="btn btn-primary">Agregar</button>
+</EditForm>
+
+<h4>Datos Ingresados</h4>
+@if (salesData.Count == 0)
+{
+    <p>No hay datos ingresados.</p>
+}
+else
+{
+    <ul>
+        @foreach (var sale in salesData)
+        {
+            <li>
+                @sale.Month: @sale.Sales
+                <button @onclick="() => RemoveSale(sale)" class="btn btn-danger btn-sm">Eliminar</button>
+            </li>
+        }
+    </ul>
+}
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">
+        @errorMessage
+    </div>
+}
+
+<button class="btn btn-success" @onclick="GenerateChart">Generar Gráfico</button>
+
+<div id="salesChart" style="margin-top: 20px;">
+    @((MarkupString)svgContent)
+</div>
+
+@code {
+    private List<MonthlySales> salesData = new List<MonthlySales>();
+    private MonthlySales newSale = new MonthlySales();
+    private string svgContent = string.Empty;
+    private string errorMessage = string.Empty;
+    private List<string> months = new List<string>
+{
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    };
+
+    private void AddSale()
+    {
+        
+        if (salesData.Any(s => s.Month.Equals(newSale.Month, StringComparison.OrdinalIgnoreCase)))
+        {
+           
+            return;
+        }
+
+        salesData.Add(new MonthlySales { Month = newSale.Month, Sales = newSale.Sales });
+        newSale = new MonthlySales(); 
+        errorMessage = string.Empty; 
+    }
+
+    private void RemoveSale(MonthlySales sale)
+    {
+        salesData.Remove(sale);
+    }
+
+    private void GenerateChart()
+    {
+        if (salesData.Count == 0)
+        {
+            errorMessage = "Ingrese datos para generar el gráfico.";
+            svgContent = string.Empty; 
+            return;
+        }
+
+        errorMessage = string.Empty; 
+        svgContent = GenerateSvg(salesData);
+    }
+
+    private string GenerateSvg(List<MonthlySales> data)
+    {
+        int width = 600;
+        int height = 400;
+        int barWidth = 40;
+        int spacing = 20;
+        double maxValue = data.Max(d => d.Sales);
+        string[] colors = { "blue", "green", "purple", "orange", "red", "cyan", "magenta", "lime", "yellow", "brown", "pink", "gray" };
+
+        var svg = new System.Text.StringBuilder();
+        svg.Append($"<svg width='{width}' height='{height}' xmlns='http://www.w3.org/2000/svg'>");
+
+        
+        svg.Append("<line x1='40' y1='350' x2='560' y2='350' style='stroke:black;stroke-width:2' />"); // Eje X
+        svg.Append("<line x1='40' y1='350' x2='40' y2='20' style='stroke:black;stroke-width:2' />");  // Eje Y
+
+       
+        svg.Append("<text x='300' y='380' text-anchor='middle'>Mes</text>");
+        svg.Append("<text x='20' y='200' text-anchor='middle' transform='rotate(-90 20,200)'>Ventas</text>");
+
+        for (int i = 0; i < data.Count; i++)
+        {
+            var sales = data[i].Sales;
+            var barHeight = (sales / maxValue) * (height - 100); // Dejar espacio para etiquetas
+            var x = 50 + i * (barWidth + spacing);
+            var y = height - barHeight - 50;
+
+            svg.Append($"<rect x='{x}' y='{y}' width='{barWidth}' height='{barHeight}' fill='{colors[i % colors.Length]}' />");
+            svg.Append($"<text x='{x + barWidth / 2}' y='{height - 35}' font-size='12' text-anchor='middle'>{data[i].Month}</text>");
+            svg.Append($"<text x='{x + barWidth / 2}' y='{y - 5}' font-size='12' text-anchor='middle'>{sales}</text>");
+        }
+        svg.Append("</svg>");
+
+        return svg.ToString();
+    }
+
+    public class MonthlySales
+    {
+        public string Month { get; set; }
+        public double Sales { get; set; }
+    }
+}
